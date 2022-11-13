@@ -1,33 +1,46 @@
-﻿using System.Text;
-using System.Xml;
-using System.Xml.Serialization;
+﻿using System.Text.Json;
 
 namespace tomxyz.csob;
 
 class Program
 {
-    public static async Task ProcessStatementAsync(string xmlStatementPath)
+    private static string ConfigFileName = "config.json";
+    public static async Task ProcessStatementAsync(string xmlStatementPath, Configuration configuration)
     {
         var statement = new Statement(xmlStatementPath);
         
-        
+        var gs = new GsheetCSOB(configuration.SheetId);
+        await gs.AutenticateAsync("key.json");
 
-        var categories = await gs.ReadCategoriesAsync();
-        var rules = await gs.ReadRulesAsync();
+        var categories = await gs.ReadCategoriesAsync(configuration.Categories);
+        var rules = await gs.ReadRulesAsync(configuration.Rules);
 
         var categorized = statement.Movements.ToLookup(x => x.GetCategory(rules));
-        var (newTab, sheetId) = ("a", 468917263);// await gs.CreateStatementTab(statement.DateFrom);        
-        await gs.WriteMovements(newTab, sheetId, categorized, categories);
+        var (newTab, sheetId) = await gs.CreateStatementTab(statement.DateFrom);        
+        await gs.WriteMovements(1, newTab, sheetId, categorized, configuration.Categories);
     }
 
     public static int Main(string[] args)
     {
         try
         {
+            var configuration = new Configuration();
+            try
+            {
+                using var file = File.OpenRead(ConfigFileName);
+                configuration = JsonSerializer.Deserialize<Configuration>(file);
+                if (configuration == null)
+                    throw new Exception($"Konfigurační soubor '{ConfigFileName}' se nebylo možné zpracovat");
+            }
+            catch (Exception e)
+            {
+                throw new Exception($"Konfigurační soubor '{ConfigFileName}' neexistuje nebo se jej nepodařilo zpracovat", e);
+            }
+
             if (args.Length == 0)
                 throw new Exception("Pass path to xml tatement as agrument");
 
-            ProcessStatementAsync(args[0])
+            ProcessStatementAsync(args[0], configuration)
                 .GetAwaiter()
                 .GetResult();
 
