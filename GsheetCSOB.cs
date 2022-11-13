@@ -10,7 +10,6 @@ internal class GsheetCSOB
     private SheetsService? Service { get; set; }
     private GoogleCredential? Credentials { get; set; }
     private string GSheetId { get; }
-    private readonly string RulesSheet = "Pravidla";
 
     internal GsheetCSOB(string gsheetId)
     {
@@ -30,27 +29,25 @@ internal class GsheetCSOB
          });
     }
 
-    public async Task<IEnumerable<string>> ReadCategoriesAsync(CancellationToken ct = default)
+    public async Task<IEnumerable<string>> ReadCategoriesAsync(string categoriesRange, CancellationToken ct = default)
     {
         if (Service == null)
             throw new Exception("Google sheet service has not been authenticated");
 
         var valuesService = Service.Spreadsheets.Values;
-        var range = $"{RulesSheet}!A:A";
-        var request = valuesService.Get(GSheetId, range);
+        var request = valuesService.Get(GSheetId, categoriesRange);
         var response = await request.ExecuteAsync(ct);
         
         return response.Values.SelectMany(x => x).Select(o => (string)o);
     }
 
-    public async Task<IEnumerable<Rule>> ReadRulesAsync(CancellationToken ct = default)
+    public async Task<IEnumerable<Rule>> ReadRulesAsync(string rulesRange, CancellationToken ct = default)
     {
         if (Service == null)
             throw new Exception("Google sheet service has not been authenticated");
 
         var valuesService = Service.Spreadsheets.Values;
-        var range = $"{RulesSheet}!C:F";
-        var request = valuesService.Get(GSheetId, range);
+        var request = valuesService.Get(GSheetId, rulesRange);
         var response = await request.ExecuteAsync(ct);
 
         return response.Values
@@ -103,85 +100,83 @@ internal class GsheetCSOB
         return (title, id);
     }
 
-    public async Task WriteMovements(string tabTitle, int sheetId, ILookup<string, Movement> movements, IEnumerable<string> categories)
+    public async Task WriteMovements(int startRow, string tabTitle, int sheetId, ILookup<string, Movement> movements, string categoriesRange)
     {
         if (Service == null)
             throw new Exception("Google sheet service has not been authenticated");
 
         var sorted = movements.OrderBy(x => x.Key);
-        int nRow = 1;
-        try
-        {            
-            var rowsInsert = new List<ValueRange>();
-            foreach (var pair in sorted)
-            {
-                var row = new ValueRange();
-                row.Range = $"{tabTitle}!A{nRow}:D{nRow + pair.Count()}";
-                row.MajorDimension = "ROWS";
-                row.Values = pair.Select(x => x.GetRow(pair.Key)).ToList();
-                rowsInsert.Add(row);
-                nRow += pair.Count();
-            }
+        int nRow = startRow;
 
-            var update = new BatchUpdateValuesRequest
-            {
-                Data = rowsInsert,
-                ValueInputOption = "USER_ENTERED" 
-            };
-
-            await Service.Spreadsheets.Values.BatchUpdate(update, GSheetId).ExecuteAsync();
-
-            // resize
-            var autoResize = new AutoResizeDimensionsRequest
-            {
-                Dimensions = new DimensionRange
-                {
-                    SheetId = sheetId,
-                    Dimension = "COLUMNS",
-                    StartIndex = 1,
-                    EndIndex = 3
-                }
-            };
-
-            var requestSize = new Request
-            {
-                AutoResizeDimensions = autoResize,
-            };
-
-            await PerformRequestAsync(requestSize);
-
-            // validation
-            var dataValidation = new SetDataValidationRequest
-            {
-                Range = new GridRange
-                {
-                    SheetId = sheetId,
-                    StartColumnIndex = 3,
-                    EndColumnIndex = 4,
-                    StartRowIndex = 0,
-                    EndRowIndex = nRow - 1
-                },
-                Rule = new DataValidationRule
-                {
-                    Condition = new BooleanCondition
-                    {
-                        Type = "ONE_OF_LIST",
-                        Values = categories.Select(x => new ConditionValue { UserEnteredValue = x }).ToList()
-                    },
-                    Strict = true
-                }
-            };
-
-            var requestValidation = new Request
-            {
-                SetDataValidation = dataValidation
-            };
-
-            await PerformRequestAsync(requestValidation);
-        }
-        catch (Exception e)
+        var rowsInsert = new List<ValueRange>();
+        foreach (var pair in sorted)
         {
-            int a = 1;
+            var row = new ValueRange();
+            row.Range = $"{tabTitle}!A{nRow}:D{nRow + pair.Count()}";
+            row.MajorDimension = "ROWS";
+            row.Values = pair.Select(x => x.GetRow(pair.Key)).ToList();
+            rowsInsert.Add(row);
+            nRow += pair.Count();
         }
+
+        var update = new BatchUpdateValuesRequest
+        {
+            Data = rowsInsert,
+            ValueInputOption = "USER_ENTERED"
+        };
+
+        await Service.Spreadsheets.Values.BatchUpdate(update, GSheetId).ExecuteAsync();
+
+        // resize
+        var autoResize = new AutoResizeDimensionsRequest
+        {
+            Dimensions = new DimensionRange
+            {
+                SheetId = sheetId,
+                Dimension = "COLUMNS",
+                StartIndex = 1,
+                EndIndex = 3
+            }
+        };
+
+        var requestSize = new Request
+        {
+            AutoResizeDimensions = autoResize,
+        };
+
+        await PerformRequestAsync(requestSize);
+
+        // validation
+        var dataValidation = new SetDataValidationRequest
+        {
+            Range = new GridRange
+            {
+                SheetId = sheetId,
+                StartColumnIndex = 3,
+                EndColumnIndex = 4,
+                StartRowIndex = 0,
+                EndRowIndex = nRow - 1
+            },
+            Rule = new DataValidationRule
+            {
+                Condition = new BooleanCondition
+                {
+                    Type = "ONE_OF_RANGE",
+                    Values = new List<ConditionValue>{ new ConditionValue
+                    {
+                        UserEnteredValue = $"={categoriesRange}"
+                    } }
+                },
+                Strict = true
+            }
+        };
+
+        var requestValidation = new Request
+        {
+            SetDataValidation = dataValidation
+        };
+
+        await PerformRequestAsync(requestValidation);
+
     }
 }
