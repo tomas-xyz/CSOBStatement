@@ -65,6 +65,11 @@ internal class GsheetCSOB
         await Service.Spreadsheets.BatchUpdate(update, GSheetId).ExecuteAsync();
     }
 
+    protected static IList<object> GetRow(IEnumerable<string> values)
+    {
+        return values.Select(x => (object) x).ToList();        
+    }
+
     /// <summary>
     /// Create a new tab for statement
     /// </summary>
@@ -76,7 +81,7 @@ internal class GsheetCSOB
             throw new Exception("Google sheet service has not been authenticated");
 
         var rand = new Random();
-        var title = $"{dateTime.Year}-{dateTime.Month}";
+        var title = $"{dateTime.Year}-{dateTime.Month.ToString("00")}";
         var id = rand.Next();
 
         // Add new Sheet
@@ -100,6 +105,43 @@ internal class GsheetCSOB
         return (title, id);
     }
 
+
+    public async Task<int> WriteSummaryAsync(string tabTitle, int sheetId, Statement statement)
+    {
+        if (Service == null)
+            throw new Exception("Google sheet service has not been authenticated");
+
+        var values = new List<IList<object>>
+        {
+            GetRow(new []{"Jméno:", statement.Name }),
+            GetRow(new []{"Účet:", statement.Account}),
+            GetRow(new []{"Od - datum:", statement.DateFrom.ToString("dd.MM yyyy")}),
+            GetRow(new []{"Do - datum:", statement.DateTo.ToString("dd.MM yyyy")}),
+            GetRow(new []{"Počáteční stav", statement.StartAmount.ToString(), "Kč"}),
+            GetRow(new []{"Koncový stav", (statement.StartAmount + statement.Plus + statement.Minus).ToString(), "Kč"}),
+            GetRow(new []{"Bilance stav", (statement.Plus + statement.Minus).ToString(), "Kč"}),
+        };
+
+        var rowsInsert = new List<ValueRange>();
+        rowsInsert.Add(
+            new ValueRange
+            {
+                Range = $"{tabTitle}!A1:C9",
+                MajorDimension = "ROWS",
+                Values = values
+            });
+
+        var update = new BatchUpdateValuesRequest
+        {
+            Data = rowsInsert,
+            ValueInputOption = "USER_ENTERED"
+        };
+
+        await Service.Spreadsheets.Values.BatchUpdate(update, GSheetId).ExecuteAsync();
+
+        return values.Count() + 1;
+    }
+
     public async Task WriteMovements(int startRow, string tabTitle, int sheetId, ILookup<string, Movement> movements, string categoriesRange)
     {
         if (Service == null)
@@ -109,6 +151,16 @@ internal class GsheetCSOB
         int nRow = startRow;
 
         var rowsInsert = new List<ValueRange>();
+
+        rowsInsert.Add(
+           new ValueRange
+           {
+               Range = $"{tabTitle}!A{nRow}:D{nRow}",
+               MajorDimension = "ROWS",
+               Values =new List<IList<object>> { GetRow(new[] { "Datum", "Místo / zpráva", "Částka", "Kategorie" }) }
+           });
+
+        var startValidatedRow = nRow++;
         foreach (var pair in sorted)
         {
             var row = new ValueRange();
@@ -154,7 +206,7 @@ internal class GsheetCSOB
                 SheetId = sheetId,
                 StartColumnIndex = 3,
                 EndColumnIndex = 4,
-                StartRowIndex = 0,
+                StartRowIndex = startValidatedRow,
                 EndRowIndex = nRow - 1
             },
             Rule = new DataValidationRule

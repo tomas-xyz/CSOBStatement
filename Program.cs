@@ -16,8 +16,10 @@ class Program
         var rules = await gs.ReadRulesAsync(configuration.Rules);
 
         var categorized = statement.Movements.ToLookup(x => x.GetCategory(rules));
-        var (newTab, sheetId) = await gs.CreateStatementTab(statement.DateFrom);        
-        await gs.WriteMovements(1, newTab, sheetId, categorized, configuration.Categories);
+        var (newTab, sheetId) = await gs.CreateStatementTab(statement.DateFrom);
+
+        var startRow = await gs.WriteSummaryAsync(newTab, sheetId, statement);
+        await gs.WriteMovements(startRow + 1, newTab, sheetId, categorized, configuration.Categories);
     }
 
     public static int Main(string[] args)
