@@ -105,6 +105,56 @@ internal class GsheetCSOB
         return (title, id);
     }
 
+    /// <summary>
+    /// Format cell range
+    /// </summary>
+    /// <param name="sheetId">sheet id</param>
+    /// <param name="startColumn">start column index</param>
+    /// <param name="endColumn">end column index</param>
+    /// <param name="startRow">start row index</param>
+    /// <param name="endRow">end row index</param>
+    /// <param name="bold">make it bold</param>
+    /// <param name="center">center it</param>
+    /// <param name="currency">format number as currency</param>
+    /// <returns></returns>
+    protected async Task FormatCellsAsync(int sheetId, int startColumn, int endColumn, int startRow, int endRow, bool bold, bool center, bool currency)
+    {
+        var request = new RepeatCellRequest
+        {
+            Range = new GridRange
+            {
+                SheetId = sheetId,
+                StartColumnIndex = startColumn,
+                EndColumnIndex = endColumn,
+                StartRowIndex = startRow,
+                EndRowIndex = endRow
+            },
+            Cell = new CellData
+            {
+                UserEnteredFormat = new CellFormat
+                {
+                    TextFormat = new TextFormat
+                    {
+                        Bold = bold                        
+                    },
+                    HorizontalAlignment = (center ? "CENTER" : "LEFT"),
+                    NumberFormat = new NumberFormat
+                    {
+                        Type = currency ? "CURRENCY" : "NUMBER_FORMAT_TYPE_UNSPECIFIED"
+                    }
+                }
+            },
+            Fields = "UserEnteredFormat"
+        };
+
+
+        var requestFormat = new Request
+        {
+            RepeatCell = request
+        };
+
+        await PerformRequestAsync(requestFormat);
+    }
 
     public async Task<int> WriteSummaryAsync(string tabTitle, int sheetId, Statement statement)
     {
@@ -115,18 +165,20 @@ internal class GsheetCSOB
         {
             GetRow(new []{"Jméno:", statement.Name }),
             GetRow(new []{"Účet:", statement.Account}),
-            GetRow(new []{"Od - datum:", statement.DateFrom.ToString("dd.MM yyyy")}),
-            GetRow(new []{"Do - datum:", statement.DateTo.ToString("dd.MM yyyy")}),
-            GetRow(new []{"Počáteční stav", statement.StartAmount.ToString(), "Kč"}),
-            GetRow(new []{"Koncový stav", (statement.StartAmount + statement.Plus + statement.Minus).ToString(), "Kč"}),
-            GetRow(new []{"Bilance stav", (statement.Plus + statement.Minus).ToString(), "Kč"}),
+            GetRow(new []{"Od:", statement.DateFrom.ToString("dd.MM yyyy")}),
+            GetRow(new []{"Do:", statement.DateTo.ToString("dd.MM yyyy")}),
+            GetRow(new []{"Počáteční stav", statement.StartAmount.ToString()}),
+            GetRow(new []{"Koncový stav", (statement.StartAmount + statement.Plus + statement.Minus).ToString()}),            
+            GetRow(new []{"Příjmy", (statement.Plus).ToString()}),
+            GetRow(new []{"Výdaje", (statement.Minus).ToString()}),
+            GetRow(new []{"Bilance", (statement.Plus + statement.Minus).ToString()}),
         };
 
         var rowsInsert = new List<ValueRange>();
         rowsInsert.Add(
             new ValueRange
             {
-                Range = $"{tabTitle}!A1:C9",
+                Range = $"{tabTitle}!A1:B10",
                 MajorDimension = "ROWS",
                 Values = values
             });
@@ -138,6 +190,39 @@ internal class GsheetCSOB
         };
 
         await Service.Spreadsheets.Values.BatchUpdate(update, GSheetId).ExecuteAsync();
+
+        // left column - bold
+        await FormatCellsAsync(
+            sheetId,
+            0,
+            1,
+            0,
+            values.Count,
+            true,
+            false,
+            false);
+
+        // right column currency and center
+        await FormatCellsAsync(
+            sheetId,
+            1,
+            2,
+            0,
+            values.Count,
+            false,
+            true,
+            true);
+
+        // bilance bold
+        await FormatCellsAsync(
+            sheetId,
+            1,
+            2,
+            values.Count - 1,
+            values.Count,
+            true,
+            true,
+            true);
 
         return values.Count() + 1;
     }
@@ -178,6 +263,39 @@ internal class GsheetCSOB
         };
 
         await Service.Spreadsheets.Values.BatchUpdate(update, GSheetId).ExecuteAsync();
+
+        // header
+        await FormatCellsAsync(
+            sheetId,
+            0,
+            4,
+            startValidatedRow - 1,
+            startValidatedRow,
+            true,
+            true,
+            false);
+
+        // center date
+        await FormatCellsAsync(
+            sheetId,
+            0,
+            1,
+            startValidatedRow,
+             nRow - 1,
+            false,
+            true,
+            false);
+
+        // center amount  and category and format amount as currency
+        await FormatCellsAsync(
+            sheetId,
+            2,
+            4,
+            startValidatedRow,
+             nRow - 1,
+            false,
+            true,
+            true);
 
         // resize
         var autoResize = new AutoResizeDimensionsRequest
@@ -229,6 +347,5 @@ internal class GsheetCSOB
         };
 
         await PerformRequestAsync(requestValidation);
-
     }
 }
