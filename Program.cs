@@ -15,11 +15,14 @@ class Program
         var categories = await gs.ReadCategoriesAsync(configuration.Categories);
         var rules = await gs.ReadRulesAsync(configuration.Rules);
 
-        var categorized = statement.Movements.ToLookup(x => x.GetCategory(rules));
+        var orderedCategorized = statement.Movements
+            .ToLookup(x => x.GetCategory(rules))
+            .OrderBy(x => x.Key, new CategoriesComparer(categories));
+
         var (newTab, sheetId) = await gs.CreateStatementTab(statement.DateFrom);
 
         var startRow = await gs.WriteSummaryAsync(newTab, sheetId, statement);
-        await gs.WriteMovements(startRow + 1, newTab, sheetId, categorized, configuration.Categories);
+        await gs.WriteMovements(startRow + 1, newTab, sheetId, orderedCategorized, configuration.Categories);
     }
 
     public static int Main(string[] args)

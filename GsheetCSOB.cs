@@ -156,6 +156,13 @@ internal class GsheetCSOB
         await PerformRequestAsync(requestFormat);
     }
 
+    /// <summary>
+    /// Write summary information about the statement
+    /// </summary>
+    /// <param name="tabTitle">tab title</param>
+    /// <param name="sheetId">sheet id</param>
+    /// <param name="statement">statement</param>
+    /// <returns>first empty row</returns>
     public async Task<int> WriteSummaryAsync(string tabTitle, int sheetId, Statement statement)
     {
         if (Service == null)
@@ -227,12 +234,19 @@ internal class GsheetCSOB
         return values.Count() + 1;
     }
 
-    public async Task WriteMovements(int startRow, string tabTitle, int sheetId, ILookup<string, Movement> movements, string categoriesRange)
+    /// <summary>
+    /// Write movements with data validation
+    /// </summary>
+    /// <param name="startRow">first row for movements</param>
+    /// <param name="tabTitle">tab title</param>
+    /// <param name="sheetId">sheet id</param>
+    /// <param name="movements">movements</param>
+    /// <param name="categoriesRange">categories</param>
+    public async Task WriteMovements(int startRow, string tabTitle, int sheetId, IOrderedEnumerable<IGrouping<string, Movement>> movements, string categoriesRange)
     {
         if (Service == null)
             throw new Exception("Google sheet service has not been authenticated");
 
-        var sorted = movements.OrderBy(x => x.Key);
         int nRow = startRow;
 
         var rowsInsert = new List<ValueRange>();
@@ -246,7 +260,7 @@ internal class GsheetCSOB
            });
 
         var startValidatedRow = nRow++;
-        foreach (var pair in sorted)
+        foreach (var pair in movements)
         {
             var row = new ValueRange();
             row.Range = $"{tabTitle}!A{nRow}:D{nRow + pair.Count()}";
@@ -263,7 +277,7 @@ internal class GsheetCSOB
         };
 
         await Service.Spreadsheets.Values.BatchUpdate(update, GSheetId).ExecuteAsync();
-
+       
         // header
         await FormatCellsAsync(
             sheetId,
@@ -296,26 +310,7 @@ internal class GsheetCSOB
             false,
             true,
             true);
-
-        // resize
-        var autoResize = new AutoResizeDimensionsRequest
-        {
-            Dimensions = new DimensionRange
-            {
-                SheetId = sheetId,
-                Dimension = "COLUMNS",
-                StartIndex = 1,
-                EndIndex = 3
-            }
-        };
-
-        var requestSize = new Request
-        {
-            AutoResizeDimensions = autoResize,
-        };
-
-        await PerformRequestAsync(requestSize);
-
+        
         // validation
         var dataValidation = new SetDataValidationRequest
         {
@@ -347,5 +342,24 @@ internal class GsheetCSOB
         };
 
         await PerformRequestAsync(requestValidation);
+
+        // resize
+        var autoResize = new AutoResizeDimensionsRequest
+        {
+            Dimensions = new DimensionRange
+            {
+                SheetId = sheetId,
+                Dimension = "COLUMNS",
+                StartIndex = 0,
+                EndIndex = 4
+            }
+        };
+
+        var requestSize = new Request
+        {
+            AutoResizeDimensions = autoResize,
+        };
+
+        await PerformRequestAsync(requestSize);
     }
 }
