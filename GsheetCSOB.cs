@@ -115,9 +115,9 @@ internal class GsheetCSOB
     /// <param name="endRow">end row index</param>
     /// <param name="bold">make it bold</param>
     /// <param name="center">center it</param>
-    /// <param name="currency">format number as currency</param>
+    /// <param name="numberFormat">format number</param>
     /// <returns></returns>
-    protected async Task FormatCellsAsync(int sheetId, int startColumn, int endColumn, int startRow, int endRow, bool bold, bool center, bool currency)
+    protected async Task FormatCellsAsync(int sheetId, int startColumn, int endColumn, int startRow, int endRow, bool bold, bool center, NumberFormatValue numberFormat = NumberFormatValue.NUMBER_FORMAT_TYPE_UNSPECIFIED)
     {
         var request = new RepeatCellRequest
         {
@@ -140,7 +140,7 @@ internal class GsheetCSOB
                     HorizontalAlignment = (center ? "CENTER" : "LEFT"),
                     NumberFormat = new NumberFormat
                     {
-                        Type = currency ? "CURRENCY" : "NUMBER_FORMAT_TYPE_UNSPECIFIED"
+                        Type = numberFormat.ToString(),
                     }
                 }
             },
@@ -206,7 +206,6 @@ internal class GsheetCSOB
             0,
             values.Count,
             true,
-            false,
             false);
 
         // right column currency and center
@@ -218,7 +217,7 @@ internal class GsheetCSOB
             values.Count,
             false,
             true,
-            true);
+            NumberFormatValue.CURRENCY);
 
         // bilance bold
         await FormatCellsAsync(
@@ -229,7 +228,7 @@ internal class GsheetCSOB
             values.Count,
             true,
             true,
-            true);
+            NumberFormatValue.CURRENCY);
 
         return values.Count() + 1;
     }
@@ -286,8 +285,7 @@ internal class GsheetCSOB
             startValidatedRow - 1,
             startValidatedRow,
             true,
-            true,
-            false);
+            true);
 
         // center date
         await FormatCellsAsync(
@@ -297,8 +295,7 @@ internal class GsheetCSOB
             startValidatedRow,
              nRow - 1,
             false,
-            true,
-            false);
+            true);
 
         // center amount  and category and format amount as currency
         await FormatCellsAsync(
@@ -309,7 +306,7 @@ internal class GsheetCSOB
              nRow - 1,
             false,
             true,
-            true);
+            NumberFormatValue.CURRENCY);
         
         // validation
         var dataValidation = new SetDataValidationRequest
@@ -362,4 +359,65 @@ internal class GsheetCSOB
 
         await PerformRequestAsync(requestSize);
     }
+
+    public async Task WriteStatisticsAsync(string tabTitle, int sheetId, IOrderedEnumerable<IGrouping<string, Movement>> movements)
+    {
+        if (Service == null)
+            throw new Exception("Google sheet service has not been authenticated");
+
+        var header = new List<IList<object>>
+        {
+            GetRow(new []{"Kategorie", "Suma", "Procento výdajů / příjmů"})
+        };
+
+        var rowsInsert = new List<ValueRange>();
+        rowsInsert.Add(
+            new ValueRange
+            {
+                Range = $"{tabTitle}!F2:H2",
+                MajorDimension = "ROWS",
+                Values = header
+            });
+
+        var update = new BatchUpdateValuesRequest
+        {
+            Data = rowsInsert,
+            ValueInputOption = "USER_ENTERED"
+        };
+
+        await Service.Spreadsheets.Values.BatchUpdate(update, GSheetId).ExecuteAsync();
+
+        // header column - bold and center
+        await FormatCellsAsync(
+            sheetId,
+            5,
+            8,
+            1,
+            2,
+            true,
+            true);
+
+        // second header column - percentage
+        await FormatCellsAsync(
+            sheetId,
+            6,
+            7,
+            2,
+            100,
+            false,
+            true,
+            NumberFormatValue.CURRENCY);
+
+        // second header column - percentage
+        await FormatCellsAsync(
+            sheetId,
+            7,
+            8,
+            2,
+            100,
+            false,
+            true,
+            NumberFormatValue.PERCENT);
+    }
+
 }
