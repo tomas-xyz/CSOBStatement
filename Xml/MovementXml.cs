@@ -39,4 +39,8 @@ public class MovementXml
 
     [XmlElement(ElementName = "REMARK")]
     public string Message7 { get; set; }
+    
+    [XmlElement(ElementName = "PART_ACC_ID")]
+    public string Message8 { get; set; }
+    
 }

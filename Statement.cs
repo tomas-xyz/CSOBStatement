@@ -61,6 +61,7 @@ public class Statement
                 x.Message5,
                 x.Message6,
                 x.Message7,
+                x.Message8
             }.Where(m => !string.IsNullOrEmpty(m))
         });        
     }
