@@ -65,9 +65,9 @@ internal class GsheetCSOB
         await Service.Spreadsheets.BatchUpdate(update, GSheetId).ExecuteAsync();
     }
 
-    protected static IList<object> GetRow(IEnumerable<string> values)
+    protected static IList<object> GetRow(IEnumerable<object> values)
     {
-        return values.Select(x => (object) x).ToList();        
+        return values.Select(x => x).ToList();        
     }
 
     /// <summary>
@@ -141,6 +141,7 @@ internal class GsheetCSOB
                     NumberFormat = new NumberFormat
                     {
                         Type = numberFormat.ToString(),
+                        Pattern = numberFormat == NumberFormatValue.PERCENT ? "#0.00%" : ""
                     }
                 }
             },
@@ -360,7 +361,7 @@ internal class GsheetCSOB
         await PerformRequestAsync(requestSize);
     }
 
-    public async Task WriteStatisticsAsync(string tabTitle, int sheetId, IOrderedEnumerable<IGrouping<string, Movement>> movements)
+    public async Task WriteStatisticsAsync(string tabTitle, int sheetId, IOrderedEnumerable<IGrouping<string, Movement>> movements, string range, IEnumerable<string> categories)
     {
         if (Service == null)
             throw new Exception("Google sheet service has not been authenticated");
@@ -386,6 +387,66 @@ internal class GsheetCSOB
         };
 
         await Service.Spreadsheets.Values.BatchUpdate(update, GSheetId).ExecuteAsync();
+
+
+        // write links to categories and sumifs formulas
+        var rowsStats = new List<ValueRange>();
+        var baseRange = range.Substring(0, range.IndexOf(':'));
+        for (var i = 1; i < categories.Count() + 1; i++)
+        {
+            var values = new List<IList<object>>
+            {
+                GetRow(new []{$"={baseRange}{i}", $"=SUMIFS(C12:C;D12:D;F{2+i})"})
+            };
+
+            rowsStats.Add(
+                new ValueRange
+                {
+                    Range = $"{tabTitle}!F{2+i}:H{2+i}",
+                    MajorDimension = "ROWS",
+                    Values = values
+                });
+        }
+
+        var valuesInsert = new BatchUpdateValuesRequest
+        {
+            Data = rowsStats,
+            ValueInputOption = "USER_ENTERED"
+        };
+
+        await Service.Spreadsheets.Values.BatchUpdate(valuesInsert, GSheetId).ExecuteAsync();
+
+        // get sums to determine positive/negative numbers
+        var request = Service.Spreadsheets.Values.Get(GSheetId, $"{tabTitle}!G3:G{3 + categories.Count()}");
+        var sums = (await request.ExecuteAsync(default)).Values.SelectMany(x => x).Select(i => double.Parse((string)i));
+        var rowsPercs = new List<ValueRange>();
+
+        int n = 1;
+        foreach (var sum in sums)
+        {
+            var values = new List<IList<object>>
+            {                
+                sum < 0 ? GetRow(new []{$"=G{2 + n}/$B$8"}) : GetRow(new []{$"=G{2 + n}/$B$7"})
+            };
+
+            rowsPercs.Add(
+                new ValueRange
+                {
+                    Range = $"{tabTitle}!H{2 + n}",
+                    MajorDimension = "ROWS",
+                    Values = values
+                });
+            
+            ++n;
+        }
+
+        var valuesPercs = new BatchUpdateValuesRequest
+        {
+            Data = rowsPercs,
+            ValueInputOption = "USER_ENTERED"
+        };
+
+        await Service.Spreadsheets.Values.BatchUpdate(valuesPercs, GSheetId).ExecuteAsync();
 
         // header column - bold and center
         await FormatCellsAsync(
@@ -418,6 +479,25 @@ internal class GsheetCSOB
             false,
             true,
             NumberFormatValue.PERCENT);
+
+        // resize
+        var autoResize = new AutoResizeDimensionsRequest
+        {
+            Dimensions = new DimensionRange
+            {
+                SheetId = sheetId,
+                Dimension = "COLUMNS",
+                StartIndex = 5,
+                EndIndex = 8
+            }
+        };
+
+        var requestSize = new Request
+        {
+            AutoResizeDimensions = autoResize,
+        };
+
+        await PerformRequestAsync(requestSize);
     }
 
 }

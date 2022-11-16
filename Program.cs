@@ -23,7 +23,7 @@ class Program
 
         var startRow = await gs.WriteSummaryAsync(newTab, sheetId, statement);
         await gs.WriteMovements(startRow + 1, newTab, sheetId, orderedCategorized, configuration.Categories);
-        await gs.WriteStatisticsAsync(newTab, sheetId, orderedCategorized);
+        await gs.WriteStatisticsAsync(newTab, sheetId, orderedCategorized, configuration.Categories, categories);
     }
 
     public static int Main(string[] args)
