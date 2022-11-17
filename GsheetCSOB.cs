@@ -115,10 +115,11 @@ internal class GsheetCSOB
     /// <param name="endRow">end row index</param>
     /// <param name="bold">make it bold</param>
     /// <param name="center">center it</param>
-    /// <param name="numberFormat">format number</param>
+    /// <param name="cellFormat">format number</param>
+    /// <param name="checkBox">format as checkbox</param>
     /// <returns></returns>
-    protected async Task FormatCellsAsync(int sheetId, int startColumn, int endColumn, int startRow, int endRow, bool bold, bool center, NumberFormatValue numberFormat = NumberFormatValue.NUMBER_FORMAT_TYPE_UNSPECIFIED)
-    {
+    protected async Task FormatCellsAsync(int sheetId, int startColumn, int endColumn, int startRow, int endRow, bool bold, bool center, CellFormat cellFormat = CellFormat.NUMBER_FORMAT_TYPE_UNSPECIFIED)
+    {                
         var request = new RepeatCellRequest
         {
             Range = new GridRange
@@ -131,7 +132,7 @@ internal class GsheetCSOB
             },
             Cell = new CellData
             {
-                UserEnteredFormat = new CellFormat
+                UserEnteredFormat = new Google.Apis.Sheets.v4.Data.CellFormat
                 {
                     TextFormat = new TextFormat
                     {
@@ -140,14 +141,46 @@ internal class GsheetCSOB
                     HorizontalAlignment = (center ? "CENTER" : "LEFT"),
                     NumberFormat = new NumberFormat
                     {
-                        Type = numberFormat.ToString(),
-                        Pattern = numberFormat == NumberFormatValue.PERCENT ? "#0.00%" : ""
+                        Type = cellFormat.ToString(),
+                        Pattern = cellFormat == CellFormat.PERCENT ? "#0.00%" : ""
                     }
-                }
+                },
             },
             Fields = "UserEnteredFormat"
         };
 
+        var requestFormat = new Request
+        {
+            RepeatCell = request
+        };
+
+        await PerformRequestAsync(requestFormat);
+    }
+
+    protected async Task CheckBoxCellsAsync(int sheetId, int column, int startRow, int endRow)
+    {
+        var request = new RepeatCellRequest
+        {
+            Range = new GridRange
+            {
+                SheetId = sheetId,
+                StartColumnIndex = column,
+                EndColumnIndex = column+1,
+                StartRowIndex = startRow,
+                EndRowIndex = endRow
+            },
+            Cell = new CellData
+            {
+                DataValidation = new DataValidationRule
+                {
+                    Condition = new BooleanCondition
+                    {
+                        Type = "BOOLEAN"
+                    }
+                }
+            },
+            Fields = "DataValidation"
+        };
 
         var requestFormat = new Request
         {
@@ -177,9 +210,9 @@ internal class GsheetCSOB
             GetRow(new []{"Do:", statement.DateTo.ToString("dd.MM yyyy")}),
             GetRow(new []{"Počáteční stav", statement.StartAmount.ToString()}),
             GetRow(new []{"Koncový stav", (statement.StartAmount + statement.Plus + statement.Minus).ToString()}),            
-            GetRow(new []{"Příjmy", (statement.Plus).ToString()}),
-            GetRow(new []{"Výdaje", (statement.Minus).ToString()}),
-            GetRow(new []{"Bilance", (statement.Plus + statement.Minus).ToString()}),
+            GetRow(new []{"Příjmy", "=SUMIFS(C12:C;C12:C;\">0\";E12:E;NEPRAVDA)"}),
+            GetRow(new []{"Výdaje","=SUMIFS(C12:C;C12:C;\"<0\";E12:E;NEPRAVDA)" }),
+            GetRow(new []{"Bilance", "=B7+B8" }),
         };
 
         var rowsInsert = new List<ValueRange>();
@@ -218,7 +251,7 @@ internal class GsheetCSOB
             values.Count,
             false,
             true,
-            NumberFormatValue.CURRENCY);
+            CellFormat.CURRENCY);
 
         // bilance bold
         await FormatCellsAsync(
@@ -229,7 +262,7 @@ internal class GsheetCSOB
             values.Count,
             true,
             true,
-            NumberFormatValue.CURRENCY);
+            CellFormat.CURRENCY);
 
         return values.Count() + 1;
     }
@@ -254,16 +287,16 @@ internal class GsheetCSOB
         rowsInsert.Add(
            new ValueRange
            {
-               Range = $"{tabTitle}!A{nRow}:D{nRow}",
+               Range = $"{tabTitle}!A{nRow}:E{nRow}",
                MajorDimension = "ROWS",
-               Values =new List<IList<object>> { GetRow(new[] { "Datum", "Místo / zpráva", "Částka", "Kategorie" }) }
+               Values =new List<IList<object>> { GetRow(new[] { "Datum", "Místo / zpráva", "Částka", "Kategorie", "Ignorovat" }) }
            });
 
         var startValidatedRow = nRow++;
         foreach (var pair in movements)
         {
             var row = new ValueRange();
-            row.Range = $"{tabTitle}!A{nRow}:D{nRow + pair.Count()}";
+            row.Range = $"{tabTitle}!A{nRow}:E{nRow + pair.Count()}";
             row.MajorDimension = "ROWS";
             row.Values = pair.Select(x => x.GetRow(pair.Key)).ToList();
             rowsInsert.Add(row);
@@ -282,7 +315,7 @@ internal class GsheetCSOB
         await FormatCellsAsync(
             sheetId,
             0,
-            4,
+            5,
             startValidatedRow - 1,
             startValidatedRow,
             true,
@@ -307,8 +340,15 @@ internal class GsheetCSOB
              nRow - 1,
             false,
             true,
-            NumberFormatValue.CURRENCY);
-        
+            CellFormat.CURRENCY);
+
+        // "Ignore" column
+        await CheckBoxCellsAsync(
+            sheetId,
+            4,
+            startValidatedRow,
+             nRow - 1);
+
         // validation
         var dataValidation = new SetDataValidationRequest
         {
@@ -375,7 +415,7 @@ internal class GsheetCSOB
         rowsInsert.Add(
             new ValueRange
             {
-                Range = $"{tabTitle}!F2:H2",
+                Range = $"{tabTitle}!G2:I2",
                 MajorDimension = "ROWS",
                 Values = header
             });
@@ -395,14 +435,14 @@ internal class GsheetCSOB
         for (var i = 1; i < categories.Count() + 1; i++)
         {
             var values = new List<IList<object>>
-            {
-                GetRow(new []{$"={baseRange}{i}", $"=SUMIFS(C12:C;D12:D;F{2+i})"})
+            {                
+                GetRow(new []{$"={baseRange}{i}", $"=SUMIFS(C12:C;D12:D;G{2+i};E12:E;FALSE)"})
             };
 
             rowsStats.Add(
                 new ValueRange
                 {
-                    Range = $"{tabTitle}!F{2+i}:H{2+i}",
+                    Range = $"{tabTitle}!G{2+i}:I{2+i}",
                     MajorDimension = "ROWS",
                     Values = values
                 });
@@ -417,7 +457,7 @@ internal class GsheetCSOB
         await Service.Spreadsheets.Values.BatchUpdate(valuesInsert, GSheetId).ExecuteAsync();
 
         // get sums to determine positive/negative numbers
-        var request = Service.Spreadsheets.Values.Get(GSheetId, $"{tabTitle}!G3:G{3 + categories.Count()}");
+        var request = Service.Spreadsheets.Values.Get(GSheetId, $"{tabTitle}!H3:H{3 + categories.Count()}");
         var sums = (await request.ExecuteAsync(default)).Values.SelectMany(x => x).Select(i => double.Parse((string)i));
         var rowsPercs = new List<ValueRange>();
 
@@ -426,13 +466,13 @@ internal class GsheetCSOB
         {
             var values = new List<IList<object>>
             {                
-                sum < 0 ? GetRow(new []{$"=G{2 + n}/$B$8"}) : GetRow(new []{$"=G{2 + n}/$B$7"})
+                sum < 0 ? GetRow(new []{$"=H{2 + n}/$B$8"}) : GetRow(new []{$"=H{2 + n}/$B$7"})
             };
 
             rowsPercs.Add(
                 new ValueRange
                 {
-                    Range = $"{tabTitle}!H{2 + n}",
+                    Range = $"{tabTitle}!I{2 + n}",
                     MajorDimension = "ROWS",
                     Values = values
                 });
@@ -452,7 +492,7 @@ internal class GsheetCSOB
         await FormatCellsAsync(
             sheetId,
             5,
-            8,
+            9,
             1,
             2,
             true,
@@ -461,24 +501,24 @@ internal class GsheetCSOB
         // second header column - percentage
         await FormatCellsAsync(
             sheetId,
-            6,
-            7,
-            2,
-            100,
-            false,
-            true,
-            NumberFormatValue.CURRENCY);
-
-        // second header column - percentage
-        await FormatCellsAsync(
-            sheetId,
             7,
             8,
             2,
             100,
             false,
             true,
-            NumberFormatValue.PERCENT);
+            CellFormat.CURRENCY);
+
+        // second header column - percentage
+        await FormatCellsAsync(
+            sheetId,
+            8,
+            9,
+            2,
+            100,
+            false,
+            true,
+            CellFormat.PERCENT);
 
         // resize
         var autoResize = new AutoResizeDimensionsRequest
@@ -487,8 +527,8 @@ internal class GsheetCSOB
             {
                 SheetId = sheetId,
                 Dimension = "COLUMNS",
-                StartIndex = 5,
-                EndIndex = 8
+                StartIndex = 6,
+                EndIndex = 9
             }
         };
 

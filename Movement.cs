@@ -32,7 +32,8 @@ public class Movement
             Date.ToString("dd.MM yyyy"),
             Messages.Where(x => !string.IsNullOrEmpty(x)).FirstOrDefault(),
             Amount.ToString(),
-            category
+            category,
+            "FALSE"
         };
     }
 }

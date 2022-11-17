@@ -1,9 +1,10 @@
 ﻿
 namespace tomxyz.csob;
 
-public enum NumberFormatValue
+public enum CellFormat
 {
     NUMBER_FORMAT_TYPE_UNSPECIFIED,
     PERCENT,
-    CURRENCY
+    CURRENCY,
+    CHECKBOX
 }
