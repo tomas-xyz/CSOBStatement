@@ -35,23 +35,26 @@ public class Rule
 
     public bool MovementFit(Movement movement)
     {
-        if (Account != null && Account == movement.Account)
-            return true;
+        if (Account != null && Account != movement.Account)
+            return false;
 
-        if (MessageSubstring != null && movement.Messages.Any(x => x.ToLower().Contains(MessageSubstring)))
-            return true;
-
-        if (MessageRegex != null && movement.Messages.Any(x => MessageRegex.IsMatch(x)))
-            return true;
+        if (MessageSubstring != null)
+        {
+            if (!movement.Messages.Any(x => x.ToLower().Contains(MessageSubstring)))
+            {
+                if (MessageRegex == null || !movement.Messages.Any(x => MessageRegex.IsMatch(x)))
+                    return false;
+            }
+        }
 
         if (Amount != null)
         {
-            if (Amount < 0)
-                return movement.Amount <= Amount;
-            else
-                return movement.Amount > Amount;
+            if (Amount < 0 && movement.Amount >= Amount)
+                return false;
+            else if (Amount >= 0 && movement.Amount < Amount)
+                return false;
         }
 
-        return false;
+        return true;
     }
 }
