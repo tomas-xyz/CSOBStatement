@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using System.Diagnostics;
+using System.Text.Json;
 
 namespace tomxyz.csob;
 
@@ -7,6 +8,9 @@ class Program
     private static string ConfigFileName = "config.json";
     public static async Task ProcessStatementAsync(string xmlStatementPath, Configuration configuration)
     {
+        var stopwatch = new Stopwatch();
+
+        stopwatch.Start();
         var statement = new Statement(xmlStatementPath);
         
         var gs = new GsheetCSOB(configuration.SheetId);
@@ -24,12 +28,20 @@ class Program
         var startRow = await gs.WriteSummaryAsync(newTab, sheetId, statement);
         await gs.WriteMovements(startRow + 1, newTab, sheetId, orderedCategorized, configuration.Categories);
         await gs.WriteStatisticsAsync(newTab, sheetId, orderedCategorized, configuration.Categories, categories);
+
+        stopwatch.Stop();
+        Console.WriteLine($"Výpis '{xmlStatementPath} 'zpracován do listu '{newTab}' v čase: {stopwatch.Elapsed}");
     }
 
     public static int Main(string[] args)
     {
+        var filePath = "nenastaveno";
         try
         {
+            if (args.Length < 1)
+                throw new Exception($"Program očekává jeden parametr s cestou k xml souboru výpisu ČSOB");
+
+            filePath = args[0];
             var configuration = new Configuration();
             try
             {
@@ -46,7 +58,7 @@ class Program
             if (args.Length == 0)
                 throw new Exception("Pass path to xml tatement as agrument");
 
-            ProcessStatementAsync(args[0], configuration)
+            ProcessStatementAsync(filePath, configuration)
                 .GetAwaiter()
                 .GetResult();
 
@@ -54,7 +66,7 @@ class Program
         }
         catch (Exception e)
         {
-            Console.WriteLine(e.Message);
+            Console.WriteLine($"Zpracování výpisu '{filePath}' selhalo s chybou: \r\n {e}");
             return 1;
         }
     }
