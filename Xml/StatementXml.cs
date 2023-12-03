@@ -1,5 +1,4 @@
-﻿using System.Text;
-using System.Xml;
+﻿using System.Xml;
 using System.Xml.Serialization;
 
 namespace tomxyz.csob.xml;
@@ -8,28 +7,28 @@ namespace tomxyz.csob.xml;
 public class StatementXml
 {
     [XmlElement(ElementName = "SHORTNAME")]
-    public string Name { get; set; }
+    public string Name { get; set; } = string.Empty;
 
     [XmlElement(ElementName = "S25_CISLO_UCTU")]
-    public string Account { get; set; }
+    public string Account { get; set; } = string.Empty;
 
     [XmlElement(ElementName = "S60_DATUM")]
-    public string DateFrom { get; set; }
+    public string DateFrom { get; set; } = string.Empty;
 
     [XmlElement(ElementName = "S62_DATUM")]
-    public string DateTo { get; set; }
+    public string DateTo { get; set; } = string.Empty;
 
     [XmlElement(ElementName = "S60_CASTKA")]
-    public string StartAmount { get; set; }
+    public string StartAmount { get; set; } = string.Empty;
 
     [XmlElement(ElementName = "SUMA_KREDIT")]
-    public string Plus { get; set; }
+    public string Plus { get; set; } = string.Empty;
 
     [XmlElement(ElementName = "SUMA_DEBIT")]
-    public string Minus { get; set; }
+    public string Minus { get; set; } = string.Empty;
 
     [XmlElement("FINSTA05")]
-    public List<MovementXml> MovementsXml { get; set; }
+    public List<MovementXml> MovementsXml { get; set; } = new List<MovementXml>();
 }
 
 

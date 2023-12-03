@@ -33,7 +33,7 @@ public class Statement
             throw new Exception("Element 'FINSTA03' has not been found in input xml");
 
         XmlSerializer serializer = new XmlSerializer(typeof(StatementXml));
-        var statement = (StatementXml)serializer.Deserialize(reader);
+        var statement = (StatementXml)(serializer.Deserialize(reader) ?? throw new Exception("Unable to deserialize statement from xml"));
         if (statement == null)
             throw new Exception("Deserialization of statement has failed");
 
@@ -48,8 +48,9 @@ public class Statement
         Movements = statement.MovementsXml.Select(x => new Movement
         {
             Date = DateTime.Parse(x.DateString),
-            Amount = double.Parse(x.Amount),            
+            Amount = double.Parse(x.Amount),
             Account = x.Account,
+            AccountId = x.AccountId,
             SpecificSymbol = long.Parse(x.SpecificSymbol),
             VariableSymbol = long.Parse(x.VariableSymbol),
             Messages = new List<string>
@@ -61,9 +62,10 @@ public class Statement
                 x.Message5,
                 x.Message6,
                 x.Message7,
-                x.Message8
+                x.Message8,
+                x.AccountId
             }.Where(m => !string.IsNullOrEmpty(m))
-        });        
+        });
     }
 }
 

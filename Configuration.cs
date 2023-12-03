@@ -2,9 +2,9 @@
 
 public class Configuration
 {
-    public string SheetId { get; set; }
+    public string SheetId { get; set; } = string.Empty;
 
-    public string Categories { get; set; }
+    public string Categories { get; set; } = string.Empty;
 
-    public string Rules { get; set; }
+    public string Rules { get; set; } = string.Empty;
 }

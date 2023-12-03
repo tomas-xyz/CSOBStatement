@@ -15,7 +15,7 @@ internal class GsheetCSOB
     {
         GSheetId = gsheetId;
     }
-        
+
     public async Task AutenticateAsync(string credentialFilePath, CancellationToken ct = default)
     {
         var credentials = await GoogleCredential.FromFileAsync(credentialFilePath, ct);
@@ -23,10 +23,10 @@ internal class GsheetCSOB
             throw new Exception("Unable to get credentials");
 
         Service = new SheetsService(new BaseClientService.Initializer()
-         {
-             HttpClientInitializer = credentials,
-             ApplicationName = "CSOBStatement"
-         });
+        {
+            HttpClientInitializer = credentials,
+            ApplicationName = "CSOBStatement"
+        });
     }
 
     public async Task<IEnumerable<string>> ReadCategoriesAsync(string categoriesRange, CancellationToken ct = default)
@@ -37,7 +37,7 @@ internal class GsheetCSOB
         var valuesService = Service.Spreadsheets.Values;
         var request = valuesService.Get(GSheetId, categoriesRange);
         var response = await request.ExecuteAsync(ct);
-        
+
         return response.Values.SelectMany(x => x).Select(o => (string)o);
     }
 
@@ -57,6 +57,9 @@ internal class GsheetCSOB
 
     protected async Task PerformRequestAsync(Request request)
     {
+        if (Service == null)
+            throw new Exception("Google sheet service has not been authenticated");
+
         var update = new BatchUpdateSpreadsheetRequest
         {
             Requests = new List<Request> { request }
@@ -67,7 +70,7 @@ internal class GsheetCSOB
 
     protected static IList<object> GetRow(IEnumerable<object> values)
     {
-        return values.Select(x => x).ToList();        
+        return values.Select(x => x).ToList();
     }
 
     /// <summary>
@@ -119,7 +122,7 @@ internal class GsheetCSOB
     /// <param name="checkBox">format as checkbox</param>
     /// <returns></returns>
     protected async Task FormatCellsAsync(int sheetId, int startColumn, int endColumn, int startRow, int endRow, bool bold, bool center, CellFormat cellFormat = CellFormat.NUMBER_FORMAT_TYPE_UNSPECIFIED)
-    {                
+    {
         var request = new RepeatCellRequest
         {
             Range = new GridRange
@@ -136,7 +139,7 @@ internal class GsheetCSOB
                 {
                     TextFormat = new TextFormat
                     {
-                        Bold = bold                        
+                        Bold = bold
                     },
                     HorizontalAlignment = (center ? "CENTER" : "LEFT"),
                     NumberFormat = new NumberFormat
@@ -165,7 +168,7 @@ internal class GsheetCSOB
             {
                 SheetId = sheetId,
                 StartColumnIndex = column,
-                EndColumnIndex = column+1,
+                EndColumnIndex = column + 1,
                 StartRowIndex = startRow,
                 EndRowIndex = endRow
             },
@@ -209,7 +212,7 @@ internal class GsheetCSOB
             GetRow(new []{"Od:", statement.DateFrom.ToString("dd.MM yyyy")}),
             GetRow(new []{"Do:", statement.DateTo.ToString("dd.MM yyyy")}),
             GetRow(new []{"Počáteční stav", statement.StartAmount.ToString()}),
-            GetRow(new []{"Koncový stav", (statement.StartAmount + statement.Plus + statement.Minus).ToString()}),            
+            GetRow(new []{"Koncový stav", (statement.StartAmount + statement.Plus + statement.Minus).ToString()}),
             GetRow(new []{"Příjmy", "=SUMIFS(C12:C;C12:C;\">0\";E12:E;NEPRAVDA)"}),
             GetRow(new []{"Výdaje","=SUMIFS(C12:C;C12:C;\"<0\";E12:E;NEPRAVDA)" }),
             GetRow(new []{"Bilance", "=B7+B8" }),
@@ -289,7 +292,7 @@ internal class GsheetCSOB
            {
                Range = $"{tabTitle}!A{nRow}:E{nRow}",
                MajorDimension = "ROWS",
-               Values =new List<IList<object>> { GetRow(new[] { "Datum", "Místo / zpráva", "Částka", "Kategorie", "Ignorovat" }) }
+               Values = new List<IList<object>> { GetRow(new[] { "Datum", "Místo / zpráva", "Částka", "Kategorie", "Ignorovat" }) }
            });
 
         var startValidatedRow = nRow++;
@@ -310,7 +313,7 @@ internal class GsheetCSOB
         };
 
         await Service.Spreadsheets.Values.BatchUpdate(update, GSheetId).ExecuteAsync();
-       
+
         // header
         await FormatCellsAsync(
             sheetId,
@@ -435,14 +438,14 @@ internal class GsheetCSOB
         for (var i = 1; i < categories.Count() + 1; i++)
         {
             var values = new List<IList<object>>
-            {                
+            {
                 GetRow(new []{$"={baseRange}{i}", $"=SUMIFS(C12:C;D12:D;G{2+i};E12:E;FALSE)"})
             };
 
             rowsStats.Add(
                 new ValueRange
                 {
-                    Range = $"{tabTitle}!G{2+i}:I{2+i}",
+                    Range = $"{tabTitle}!G{2 + i}:I{2 + i}",
                     MajorDimension = "ROWS",
                     Values = values
                 });
@@ -465,7 +468,7 @@ internal class GsheetCSOB
         foreach (var sum in sums)
         {
             var values = new List<IList<object>>
-            {                
+            {
                 sum < 0 ? GetRow(new []{$"=H{2 + n}/$B$8"}) : GetRow(new []{$"=H{2 + n}/$B$7"})
             };
 
@@ -476,7 +479,7 @@ internal class GsheetCSOB
                     MajorDimension = "ROWS",
                     Values = values
                 });
-            
+
             ++n;
         }
 
