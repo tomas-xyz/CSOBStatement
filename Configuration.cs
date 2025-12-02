@@ -7,4 +7,6 @@ public class Configuration
     public string Categories { get; set; } = string.Empty;
 
     public string Rules { get; set; } = string.Empty;
+
+    public string Accounts { get; set; } = string.Empty;
 }

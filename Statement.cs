@@ -21,7 +21,7 @@ public class Statement
 
     public double Minus { get; set; }
 
-    public IEnumerable<Movement> Movements { get; }
+    public IEnumerable<Movement> Movements { get; set; }
 
     public Dictionary<string, IEnumerable<Movement>> CategorizedMovements;
 
@@ -47,9 +47,11 @@ public class Statement
         Minus = -double.Parse(statement.Minus.Substring(statement.Minus.IndexOf('=') + 1));
         Movements = statement.MovementsXml.Select(x => new Movement
         {
+            AccountType = statement.AccountType,
             Date = DateTime.Parse(x.DateString),
             Amount = double.Parse(x.Amount),
             Account = x.Account,
+            BankId = x.BankId,
             AccountId = x.AccountId,
             SpecificSymbol = long.Parse(x.SpecificSymbol),
             VariableSymbol = long.Parse(x.VariableSymbol),
@@ -62,8 +64,7 @@ public class Statement
                 x.Message5,
                 x.Message6,
                 x.Message7,
-                x.Message8,
-                x.AccountId
+                x.Message8
             }.Where(m => !string.IsNullOrEmpty(m))
         });
     }

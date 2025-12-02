@@ -6,9 +6,7 @@ using Google.Apis.Sheets.v4.Data;
 namespace tomxyz.csob;
 internal class GsheetCSOB
 {
-    readonly string[] Scopes = { SheetsService.Scope.Spreadsheets };
     private SheetsService? Service { get; set; }
-    private GoogleCredential? Credentials { get; set; }
     private string GSheetId { get; }
 
     internal GsheetCSOB(string gsheetId)
@@ -29,13 +27,13 @@ internal class GsheetCSOB
         });
     }
 
-    public async Task<IEnumerable<string>> ReadCategoriesAsync(string categoriesRange, CancellationToken ct = default)
+    public async Task<IEnumerable<string>> ReadStringRangeAsync(string range, CancellationToken ct = default)
     {
         if (Service == null)
             throw new Exception("Google sheet service has not been authenticated");
 
         var valuesService = Service.Spreadsheets.Values;
-        var request = valuesService.Get(GSheetId, categoriesRange);
+        var request = valuesService.Get(GSheetId, range);
         var response = await request.ExecuteAsync(ct);
 
         return response.Values.SelectMany(x => x).Select(o => (string)o);
@@ -84,7 +82,7 @@ internal class GsheetCSOB
             throw new Exception("Google sheet service has not been authenticated");
 
         var rand = new Random();
-        var title = $"{dateTime.Year}-{dateTime.Month.ToString("00")}";
+        var title = $"{dateTime.Year}-{dateTime.Month:00}";
         var id = rand.Next();
 
         // Add new Sheet
@@ -213,8 +211,8 @@ internal class GsheetCSOB
             GetRow(new []{"Do:", statement.DateTo.ToString("dd.MM yyyy")}),
             GetRow(new []{"Počáteční stav", statement.StartAmount.ToString()}),
             GetRow(new []{"Koncový stav", (statement.StartAmount + statement.Plus + statement.Minus).ToString()}),
-            GetRow(new []{"Příjmy", "=SUMIFS(C12:C;C12:C;\">0\";E12:E;NEPRAVDA)"}),
-            GetRow(new []{"Výdaje","=SUMIFS(C12:C;C12:C;\"<0\";E12:E;NEPRAVDA)" }),
+            GetRow(new []{"Příjmy", "=SUMIFS(D12:D;D12:D;\">0\";F12:F;NEPRAVDA)"}),
+            GetRow(new []{"Výdaje","=SUMIFS(D12:D;D12:D;\"<0\";F12:F;NEPRAVDA)" }),
             GetRow(new []{"Bilance", "=B7+B8" }),
         };
 
@@ -278,30 +276,34 @@ internal class GsheetCSOB
     /// <param name="sheetId">sheet id</param>
     /// <param name="movements">movements</param>
     /// <param name="categoriesRange">categories</param>
-    public async Task WriteMovements(int startRow, string tabTitle, int sheetId, IOrderedEnumerable<IGrouping<string, Movement>> movements, string categoriesRange)
+    /// <param name="ownAccounts">own accounts</param>
+    public async Task WriteMovements(int startRow, string tabTitle, int sheetId, IOrderedEnumerable<IGrouping<string, Movement>> movements, string categoriesRange, IEnumerable<string> ownAccounts)
     {
         if (Service == null)
             throw new Exception("Google sheet service has not been authenticated");
 
         int nRow = startRow;
 
-        var rowsInsert = new List<ValueRange>();
-
-        rowsInsert.Add(
-           new ValueRange
-           {
-               Range = $"{tabTitle}!A{nRow}:E{nRow}",
-               MajorDimension = "ROWS",
-               Values = new List<IList<object>> { GetRow(new[] { "Datum", "Místo / zpráva", "Částka", "Kategorie", "Ignorovat" }) }
-           });
+        var rowsInsert = new List<ValueRange>
+        {
+            new ValueRange
+            {
+                Range = $"{tabTitle}!A{nRow}:F{nRow}",
+                MajorDimension = "ROWS",
+                Values = new List<IList<object>> { GetRow(new[] { "Datum", "Účet", "Místo / zpráva", "Částka", "Kategorie", "Ignorovat" }) }
+            }
+        };
 
         var startValidatedRow = nRow++;
         foreach (var pair in movements)
         {
-            var row = new ValueRange();
-            row.Range = $"{tabTitle}!A{nRow}:E{nRow + pair.Count()}";
-            row.MajorDimension = "ROWS";
-            row.Values = pair.Select(x => x.GetRow(pair.Key)).ToList();
+            var row = new ValueRange
+            {
+                Range = $"{tabTitle}!A{nRow}:F{nRow + pair.Count()}",
+                MajorDimension = "ROWS",
+                Values = pair.Select(x => x.GetRow(pair.Key, ownAccounts)).ToList()
+            };
+
             rowsInsert.Add(row);
             nRow += pair.Count();
         }
@@ -318,7 +320,7 @@ internal class GsheetCSOB
         await FormatCellsAsync(
             sheetId,
             0,
-            5,
+            6,
             startValidatedRow - 1,
             startValidatedRow,
             true,
@@ -334,11 +336,11 @@ internal class GsheetCSOB
             false,
             true);
 
-        // center amount  and category and format amount as currency
+        // center amount and category and format amount as currency
         await FormatCellsAsync(
             sheetId,
-            2,
-            4,
+            3,
+            5,
             startValidatedRow,
              nRow - 1,
             false,
@@ -348,7 +350,7 @@ internal class GsheetCSOB
         // "Ignore" column
         await CheckBoxCellsAsync(
             sheetId,
-            4,
+            5,
             startValidatedRow,
              nRow - 1);
 
@@ -358,8 +360,8 @@ internal class GsheetCSOB
             Range = new GridRange
             {
                 SheetId = sheetId,
-                StartColumnIndex = 3,
-                EndColumnIndex = 4,
+                StartColumnIndex = 4,
+                EndColumnIndex = 5,
                 StartRowIndex = startValidatedRow,
                 EndRowIndex = nRow - 1
             },
@@ -392,7 +394,7 @@ internal class GsheetCSOB
                 SheetId = sheetId,
                 Dimension = "COLUMNS",
                 StartIndex = 0,
-                EndIndex = 4
+                EndIndex = 5
             }
         };
 
@@ -404,7 +406,7 @@ internal class GsheetCSOB
         await PerformRequestAsync(requestSize);
     }
 
-    public async Task WriteStatisticsAsync(string tabTitle, int sheetId, IOrderedEnumerable<IGrouping<string, Movement>> movements, string range, IEnumerable<string> categories)
+    public async Task WriteStatisticsAsync(string tabTitle, int sheetId, string range, IEnumerable<string> categories)
     {
         if (Service == null)
             throw new Exception("Google sheet service has not been authenticated");
@@ -414,14 +416,15 @@ internal class GsheetCSOB
             GetRow(new []{"Kategorie", "Suma", "Procento výdajů / příjmů"})
         };
 
-        var rowsInsert = new List<ValueRange>();
-        rowsInsert.Add(
-            new ValueRange
+        var rowsInsert = new List<ValueRange>
+        {
+            new()
             {
-                Range = $"{tabTitle}!G2:I2",
+                Range = $"{tabTitle}!H2:J2",
                 MajorDimension = "ROWS",
                 Values = header
-            });
+            }
+        };
 
         var update = new BatchUpdateValuesRequest
         {
@@ -434,18 +437,18 @@ internal class GsheetCSOB
 
         // write links to categories and sumifs formulas
         var rowsStats = new List<ValueRange>();
-        var baseRange = range.Substring(0, range.IndexOf(':'));
+        var baseRange = range[..range.IndexOf(':')];
         for (var i = 1; i < categories.Count() + 1; i++)
         {
             var values = new List<IList<object>>
             {
-                GetRow(new []{$"={baseRange}{i}", $"=SUMIFS(C12:C;D12:D;G{2+i};E12:E;FALSE)"})
+                GetRow(new []{$"={baseRange}{i}", $"=SUMIFS(D12:D;E12:E;H{2+i};F12:F;FALSE)"})
             };
 
             rowsStats.Add(
                 new ValueRange
                 {
-                    Range = $"{tabTitle}!G{2 + i}:I{2 + i}",
+                    Range = $"{tabTitle}!H{2 + i}:J{2 + i}",
                     MajorDimension = "ROWS",
                     Values = values
                 });
@@ -460,7 +463,7 @@ internal class GsheetCSOB
         await Service.Spreadsheets.Values.BatchUpdate(valuesInsert, GSheetId).ExecuteAsync();
 
         // get sums to determine positive/negative numbers
-        var request = Service.Spreadsheets.Values.Get(GSheetId, $"{tabTitle}!H3:H{3 + categories.Count()}");
+        var request = Service.Spreadsheets.Values.Get(GSheetId, $"{tabTitle}!I3:I{3 + categories.Count()}");
         var sums = (await request.ExecuteAsync(default)).Values.SelectMany(x => x).Select(i => double.Parse((string)i));
         var rowsPercs = new List<ValueRange>();
 
@@ -469,13 +472,13 @@ internal class GsheetCSOB
         {
             var values = new List<IList<object>>
             {
-                sum < 0 ? GetRow(new []{$"=H{2 + n}/$B$8"}) : GetRow(new []{$"=H{2 + n}/$B$7"})
+                sum < 0 ? GetRow(new []{$"=I{2 + n}/$B$8"}) : GetRow(new []{$"=I{2 + n}/$B$7"})
             };
 
             rowsPercs.Add(
                 new ValueRange
                 {
-                    Range = $"{tabTitle}!I{2 + n}",
+                    Range = $"{tabTitle}!J{2 + n}",
                     MajorDimension = "ROWS",
                     Values = values
                 });
@@ -494,8 +497,8 @@ internal class GsheetCSOB
         // header column - bold and center
         await FormatCellsAsync(
             sheetId,
-            5,
-            9,
+            6,
+            10,
             1,
             2,
             true,
@@ -504,8 +507,8 @@ internal class GsheetCSOB
         // second header column - percentage
         await FormatCellsAsync(
             sheetId,
-            7,
             8,
+            9,
             2,
             100,
             false,
@@ -515,8 +518,8 @@ internal class GsheetCSOB
         // second header column - percentage
         await FormatCellsAsync(
             sheetId,
-            8,
             9,
+            10,
             2,
             100,
             false,
@@ -530,8 +533,8 @@ internal class GsheetCSOB
             {
                 SheetId = sheetId,
                 Dimension = "COLUMNS",
-                StartIndex = 6,
-                EndIndex = 9
+                StartIndex = 7,
+                EndIndex = 10
             }
         };
 

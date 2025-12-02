@@ -6,7 +6,10 @@ public class Movement
 
     public double Amount { get; set; }
 
+    public string AccountType { get; set; } = string.Empty;
     public string Account { get; set; } = string.Empty;
+
+    public string BankId { get; set; } = string.Empty;
 
     public long SpecificSymbol { get; set; }
 
@@ -26,15 +29,16 @@ public class Movement
         return string.Empty;
     }
 
-    public IList<object> GetRow(string category)
+    public IList<object> GetRow(string category, IEnumerable<string> ownAccounts)
     {
         return new List<object>()
         {
             Date.ToString("dd.MM yyyy"),
+            AccountType,
             RowId(),
             Amount.ToString(),
             category,
-            "FALSE"
+            ownAccounts.Contains($"{Account}/{BankId}") ? "TRUE" : "FALSE"
         };
     }
 
@@ -43,13 +47,23 @@ public class Movement
         var id = string.Empty;
 
         if (!string.IsNullOrEmpty(AccountId))
-            id += AccountId + ", ";
+        {
+            id += AccountId;
+            if (!string.IsNullOrEmpty(Account))
+                id += $" ({Account}/{BankId})";
+
+            id += ", ";
+        }
+        else if (!string.IsNullOrEmpty(Account))
+            id += $"{Account}/{BankId}, ";
 
         if (Messages.Any() && !string.IsNullOrEmpty(Messages.First()))
             id += Messages.First();
 
         if (string.IsNullOrEmpty(id))
             id = Messages.Where(x => !string.IsNullOrEmpty(x)).First() ?? "Žádný popis";
+
+
 
         return id;
     }

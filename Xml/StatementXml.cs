@@ -12,6 +12,9 @@ public class StatementXml
     [XmlElement(ElementName = "S25_CISLO_UCTU")]
     public string Account { get; set; } = string.Empty;
 
+    [XmlElement(ElementName = "TYPE_ACC_TXT")]
+    public string AccountType { get; set; } = string.Empty;
+
     [XmlElement(ElementName = "S60_DATUM")]
     public string DateFrom { get; set; } = string.Empty;
 

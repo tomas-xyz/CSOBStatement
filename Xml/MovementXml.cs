@@ -13,6 +13,9 @@ public class MovementXml
     [XmlElement(ElementName = "PART_ACCNO")]
     public string Account { get; set; } = string.Empty;
 
+    [XmlElement(ElementName = "PART_BANK_ID")]
+    public string BankId { get; set; } = string.Empty;
+
     [XmlElement(ElementName = "S86_SPECSYMPAR")]
     public string SpecificSymbol { get; set; } = string.Empty;
 
